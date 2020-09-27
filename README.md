@@ -6,12 +6,15 @@ This is a script that monitors the rss feed of craigslist to scrape rental apart
 
 To build the docker container:
 
-```docker build --tag crawler .```
+```
+docker build --tag crawler .
+```
 
 To run the script:
 
-```docker run --rm -it \
+```
+docker run --rm -it \
 --volume "`pwd`:/home/ncode/app" \
 crawler \
-
+scraper/check_listings.sh
 ```
