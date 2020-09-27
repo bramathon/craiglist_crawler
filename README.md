@@ -14,7 +14,7 @@ To run the script:
 
 ```
 docker run --rm -it \
---volume "`pwd`:/home/ncode/app" \
+--volume "`pwd`:/home/craig/app" \
 crawler \
 scraper/check_listings.sh
 ```

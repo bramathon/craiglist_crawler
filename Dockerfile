@@ -3,7 +3,7 @@ FROM python:slim-buster
 RUN python -m pip install --upgrade pip \
  && pip install pipenv==2020.8.13
  
-ARG USER=ncode
+ARG USER=craig
 ARG UID=1000
 ARG GID=1000
 RUN addgroup --gid ${GID} ${USER} \
