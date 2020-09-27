@@ -1,0 +1,21 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[packages]
+
+beautifulsoup4 = "*"
+feedparser = "*"
+google-cloud = "*"
+lxml = "*"
+matplotlib = "*"
+numpy = "*"
+pandas = "*"
+pip = "*"
+
+[requires]
+python_version = "3.8"
+
+[pipenv]
+allow_prereleases = true
