@@ -8,11 +8,15 @@ verify_ssl = true
 beautifulsoup4 = "*"
 feedparser = "*"
 google-cloud = "*"
+google-cloud-bigquery = "*"
 lxml = "*"
 matplotlib = "*"
 numpy = "*"
 pandas = "*"
 pip = "*"
+python-dotenv = "*"
+requests = "*"
+
 
 [requires]
 python_version = "3.8"
