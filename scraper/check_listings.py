@@ -96,7 +96,7 @@ def get_bedrooms(soup):
             if s.find("BR") != -1:
                 bedrooms = parse_int(s)
     except:
-        bathrooms = None
+        bedrooms = None
     return bedrooms
 
 
@@ -265,7 +265,8 @@ if __name__ == "__main__":
     assert city in supported_cities
 
     url = rss_feeds[city]
-    apts = feedparser.parse(url)
+    r = requests.get(url)
+    apts = feedparser.parse(r.text)
     conn = sqlite3.connect("listings-v3.db")
     c = conn.cursor()
 
@@ -280,8 +281,8 @@ if __name__ == "__main__":
         post_date = entry.updated
         post_id = entry.id
         title = entry.title
-        print(post_date)
-        print(post_id)
+        #print(post_date)
+        #print(post_id)
         # check if the entry is already in the database
         sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
         c.execute(sql, [post_id, post_date])
@@ -289,7 +290,7 @@ if __name__ == "__main__":
             logging.debug("Already in db...")
         else:
             # Go get the page
-            logging.info(f"New Entry. Parsing and adding to database")
+            logging.info(f"New Entry: {entry.link} Parsing and adding to database")
             page = requests.get(entry.link)
             tree = html.fromstring(page.content)
             soup = BeautifulSoup(page.text, "html.parser")
