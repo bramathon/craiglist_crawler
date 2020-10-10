@@ -281,8 +281,8 @@ if __name__ == "__main__":
         post_date = entry.updated
         post_id = entry.id
         title = entry.title
-        #print(post_date)
-        #print(post_id)
+        # print(post_date)
+        # print(post_id)
         # check if the entry is already in the database
         sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
         c.execute(sql, [post_id, post_date])
@@ -397,4 +397,4 @@ if __name__ == "__main__":
             logging.debug(f"Added entry {post_id} to db")
             time.sleep(1)
 
-        c.close()
+    c.close()
