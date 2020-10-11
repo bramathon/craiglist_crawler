@@ -1,0 +1,17 @@
+name: craig
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - beautifulsoup4
+  - feedparser
+  - lxml
+  - matplotlib
+  - numpy
+  - pandas
+  - pip
+  - requests
+  - pip:
+    - python-dotenv
+    - google-cloud
+    - google-cloud-bigquery
