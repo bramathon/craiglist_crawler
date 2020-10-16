@@ -4,7 +4,7 @@ This is a script that monitors the rss feed of craigslist to scrape rental apart
 
 ## Getting started
 
-Make sure docker engine is installed and pipenv is installed.
+A Docker container is available, but craigslist seems to reject requests from it in some circumstances. Thus, advise against using for now.
 
 To build the docker container:
 
@@ -19,6 +19,17 @@ docker run --rm -it \
 --volume "`pwd`:/home/craig/app" \
 crawler \
 scraper/check_listings.sh
+```
+
+### Install conda
+
+To install conda silently
+
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+bash ~/miniconda.sh -b -p $HOME/miniconda
+# activate in your shell
+eval "$(/Users/jsmith/anaconda/bin/conda shell.YOUR_SHELL_NAME hook)"
 ```
 
 ### gcloud Credentals

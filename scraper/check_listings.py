@@ -26,8 +26,8 @@ from bs4 import BeautifulSoup
 from google.cloud import bigquery
 from dotenv import load_dotenv
 
-from scraper.vancouver_neighbourhoods import hoods, cities
-from scraper.rss_feeds import supported_cities, rss_feeds
+from vancouver_neighbourhoods import hoods, cities
+from rss_feeds import supported_cities, rss_feeds
 
 
 def parse_int(string):
@@ -266,32 +266,41 @@ if __name__ == "__main__":
 
     url = rss_feeds[city]
     r = requests.get(url)
-    apts = feedparser.parse(r.text)
+    # apts = feedparser.parse(r.text)
     conn = sqlite3.connect("listings-v3.db")
     c = conn.cursor()
 
     client = bigquery.Client()
     table = client.get_table("bram-185008.craiglist_crawler.listings")
 
-    n = len(apts.entries)
-    logging.info(f"Found {n} listings")
-
-    for entry in reversed(apts.entries):
+    
+    if r.status_code != 200:
+        print("Bad Request")
+        
+    # pick out the listings
+    stock = BeautifulSoup(r.text, "html.parser")
+    listings = stock.find_all("li",class_="result-row")
+    
+    print(f"Found {len(listings)} listings")
+    
+    for entry in listings:
         # Grab some in info from the entry
-        post_date = entry.updated
-        post_id = entry.id
-        title = entry.title
+        post_info = entry.div
+        post_date = post_info.time.get('datetime')
+        post_id = post_info.a.get('data-id')
+        post_url = post_info.a.get('href')
+        title = post_info.a.text
         # print(post_date)
-        # print(post_id)
+        # print(post_url)
         # check if the entry is already in the database
         sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
-        c.execute(sql, [post_id, post_date])
+        c.execute(sql, [post_url, post_date])
         if c.fetchone():
             logging.debug("Already in db...")
         else:
             # Go get the page
-            logging.info(f"New Entry: {entry.link} Parsing and adding to database")
-            page = requests.get(entry.link)
+            logging.info(f"New Entry: {post_url} Parsing and adding to database")
+            page = requests.get(post_url)
             tree = html.fromstring(page.content)
             soup = BeautifulSoup(page.text, "html.parser")
             latitude, longitude = get_coordinates(tree)
@@ -315,7 +324,7 @@ if __name__ == "__main__":
 
             listing = [
                 post_date,
-                post_id,
+                post_url,
                 title,
                 latitude,
                 longitude,
@@ -336,7 +345,7 @@ if __name__ == "__main__":
                 "INSERT INTO listings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [
                     post_date,
-                    post_id,
+                    post_url,
                     title,
                     latitude,
                     longitude,
@@ -367,7 +376,7 @@ if __name__ == "__main__":
                 [
                     (
                         post_date,
-                        post_id,
+                        post_url,
                         title,
                         latitude,
                         longitude,
@@ -394,7 +403,7 @@ if __name__ == "__main__":
             )
 
             logging.debug(f"Added entry to BigQuery {response}")
-            logging.debug(f"Added entry {post_id} to db")
+            logging.debug(f"Added entry {post_url} to db")
             time.sleep(1)
 
     c.close()
