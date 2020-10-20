@@ -12,7 +12,6 @@ dependencies:
   - jupyterlab
   - pip
   - requests
+  - google-cloud-bigquery
   - pip:
     - python-dotenv
-    - google-cloud
-    - google-cloud-bigquery

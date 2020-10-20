@@ -301,6 +301,9 @@ if __name__ == "__main__":
             # Go get the page
             logging.info(f"New Entry: {post_url} Parsing and adding to database")
             page = requests.get(post_url)
+            if page.status_code != 200:
+                print(f'Bad Request: {page.text}')
+                continue
             tree = html.fromstring(page.content)
             soup = BeautifulSoup(page.text, "html.parser")
             latitude, longitude = get_coordinates(tree)
