@@ -13,5 +13,8 @@ dependencies:
   - pip
   - requests
   - google-cloud-bigquery
+  - prefect
   - pip:
+    - black
+    - python-language-server[all]
     - python-dotenv

@@ -6,7 +6,6 @@ Created on Mon Jan 25 20:03:09 2016
 @author: bram
 """
 
-import feedparser
 import requests
 import sqlite3
 import time
@@ -28,6 +27,8 @@ from dotenv import load_dotenv
 
 from vancouver_neighbourhoods import hoods, cities
 from rss_feeds import supported_cities, rss_feeds
+
+logger = logging.getLogger(__name__)
 
 
 def parse_int(string):
@@ -243,6 +244,187 @@ def extra_processor(extras):
     return [unit_type, parking, smoking, pets, laundry, furnished]
 
 
+def get_listings(city):
+    "Parse the main listings page to get the recent listings"
+    # make sure this is a supported city
+    assert city in supported_cities
+
+    url = rss_feeds[city]
+    r = requests.get(url)
+
+    if r.status_code != 200:
+        print("Bad Request")
+
+    # pick out the listings
+    stock = BeautifulSoup(r.text, "html.parser")
+    listings = stock.find_all("li", class_="result-row")
+
+    print(f"Found {len(listings)} listings")
+    return listings
+
+
+def parse_listing(post_url):
+    "Parses a craiglist housing for rent ad"
+    logging.info(f"New Entry: {post_url} Parsing and adding to database")
+    page = requests.get(post_url)
+    if page.status_code != 200:
+        logger.warn(f"Bad Request: {page.text}")
+        raise Exception
+    tree = html.fromstring(page.content)
+    soup = BeautifulSoup(page.text, "html.parser")
+
+    latitude, longitude = get_coordinates(tree)
+    address = get_address(soup)
+    price = get_price(soup)
+    area = get_area(soup)
+    bedrooms = get_bedrooms(soup)
+    bathrooms = get_bathrooms(soup)
+    extras = get_all_the_stuff(soup)
+    body = get_body(soup)
+    unit_type, parking, smoking, pets, laundry, furnished = extra_processor(extras)
+    date_available = get_date_available(soup)
+    neighbourhood = get_neighbourhood(latitude, longitude)
+    location = get_location(soup)
+    muni = get_muni(latitude, longitude)
+
+    data = {
+        "post_url": post_url,
+        "latitude": latitude,
+        "longitude": longitude,
+        "address": address,
+        "price": price,
+        "area": area,
+        "bedrooms": bedrooms,
+        "bathrooms": bathrooms,
+        "extras": extras,
+        "body": body,
+        "unit_type": unit_type,
+        "parking": parking,
+        "smoking": smoking,
+        "pets": pets,
+        "laundry": laundry,
+        "furnished": furnished,
+        "date_available": date_available,
+        "neighbourhood": neighbourhood,
+        "location": location,
+        "muni": muni,
+    }
+
+    return data
+
+
+def save_listing(listing, conn):
+    "listing is a dict with attributes matching columns"
+    l = listing
+    conn.execute(
+        "INSERT INTO listings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            l["post_date"],
+            l["post_url"],
+            l["title"],
+            l["latitude"],
+            l["longitude"],
+            l["address"],
+            l["date_available"],
+            l["price"],
+            l["area"],
+            l["neighbourhood"],
+            l["extras"],
+            l["bedrooms"],
+            l["bathrooms"],
+            l["unit_type"],
+            l["parking"],
+            l["smoking"],
+            l["pets"],
+            l["laundry"],
+            l["furnished"],
+            l["muni"],
+            l["location"],
+            l["body"],
+            l["city"],
+        ],
+    )
+    conn.commit()
+    logger.debug(f"Added entry {l['post_url']} to db")
+
+
+def save_to_biqquery(listing, client):
+    l = listing
+    table = client.get_table("bram-185008.craiglist_crawler.listings")
+    response = client.insert_rows(
+        table,
+        [
+            (
+                l["post_date"],
+                l["post_url"],
+                l["title"],
+                l["latitude"],
+                l["longitude"],
+                l["address"],
+                l["date_available"],
+                l["price"],
+                l["area"],
+                l["neighbourhood"],
+                l["extras"],
+                l["bedrooms"],
+                l["bathrooms"],
+                l["unit_type"],
+                l["parking"],
+                l["smoking"],
+                l["pets"],
+                l["laundry"],
+                l["furnished"],
+                l["muni"],
+                l["location"],
+                l["body"],
+                l["city"],
+            )
+        ],
+    )
+    logger.debug(f"Added entry to BigQuery {response}")
+
+
+def main(city, db):
+
+    listings = get_listings(city)
+
+    conn = sqlite3.connect(db)
+    c = conn.cursor()
+
+    client = bigquery.Client()
+
+    for entry in listings:
+        # Grab some in info from the entry
+        post_info = entry.div
+        post_date = post_info.time.get("datetime")
+        post_id = post_info.a.get("data-id")
+        post_url = post_info.a.get("href")
+        title = post_info.a.text
+        # print(post_date)
+        # print(post_url)
+        # check if the entry is already in the database
+        sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
+        c.execute(sql, [post_url, post_date])
+        if c.fetchone():
+            logging.debug("Already in db...")
+        else:
+            try:
+                listing = parse_listing(post_url)
+            except:
+                continue
+
+            listing["post_date"] = post_date
+            listing["title"] = title
+            listing["city"] = city
+
+            save_listing(listing, conn)
+
+            save_to_biqquery(listing, client)
+            time.sleep(1)
+
+    c.close()
+
+
 if __name__ == "__main__":
     # SETTINGS
     parser = argparse.ArgumentParser(description="Download the latest data")
@@ -261,152 +443,4 @@ if __name__ == "__main__":
     load_dotenv()
     city = args.metro
 
-    # make sure this is a supported city
-    assert city in supported_cities
-
-    url = rss_feeds[city]
-    r = requests.get(url)
-    # apts = feedparser.parse(r.text)
-    conn = sqlite3.connect("listings-v3.db")
-    c = conn.cursor()
-
-    client = bigquery.Client()
-    table = client.get_table("bram-185008.craiglist_crawler.listings")
-
-    
-    if r.status_code != 200:
-        print("Bad Request")
-        
-    # pick out the listings
-    stock = BeautifulSoup(r.text, "html.parser")
-    listings = stock.find_all("li",class_="result-row")
-    
-    print(f"Found {len(listings)} listings")
-    
-    for entry in listings:
-        # Grab some in info from the entry
-        post_info = entry.div
-        post_date = post_info.time.get('datetime')
-        post_id = post_info.a.get('data-id')
-        post_url = post_info.a.get('href')
-        title = post_info.a.text
-        # print(post_date)
-        # print(post_url)
-        # check if the entry is already in the database
-        sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
-        c.execute(sql, [post_url, post_date])
-        if c.fetchone():
-            logging.debug("Already in db...")
-        else:
-            # Go get the page
-            logging.info(f"New Entry: {post_url} Parsing and adding to database")
-            page = requests.get(post_url)
-            if page.status_code != 200:
-                print(f'Bad Request: {page.text}')
-                continue
-            tree = html.fromstring(page.content)
-            soup = BeautifulSoup(page.text, "html.parser")
-            latitude, longitude = get_coordinates(tree)
-
-            # if latitude == None or longitude == None:
-            #    print("No lat-long, moving to next entry")
-            #    continue
-
-            address = get_address(soup)
-            price = get_price(soup)
-            area = get_area(soup)
-            bedrooms = get_bedrooms(soup)
-            bathrooms = get_bathrooms(soup)
-            extras = get_all_the_stuff(soup)
-            body = get_body(soup)
-            unit_type, parking, smoking, pets, laundry, furnished = extra_processor(extras)
-            date_available = get_date_available(soup)
-            neighbourhood = get_neighbourhood(latitude, longitude)
-            location = get_location(soup)
-            muni = get_muni(latitude, longitude)
-
-            listing = [
-                post_date,
-                post_url,
-                title,
-                latitude,
-                longitude,
-                address,
-                date_available,
-                price,
-                area,
-                neighbourhood,
-                location,
-                extras,
-                bedrooms,
-                bathrooms,
-                muni,
-                body,
-                city,
-            ]
-            c.execute(
-                "INSERT INTO listings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                [
-                    post_date,
-                    post_url,
-                    title,
-                    latitude,
-                    longitude,
-                    address,
-                    date_available,
-                    price,
-                    area,
-                    neighbourhood,
-                    extras,
-                    bedrooms,
-                    bathrooms,
-                    unit_type,
-                    parking,
-                    smoking,
-                    pets,
-                    laundry,
-                    furnished,
-                    muni,
-                    location,
-                    body,
-                    city,
-                ],
-            )
-            conn.commit()
-
-            response = client.insert_rows(
-                table,
-                [
-                    (
-                        post_date,
-                        post_url,
-                        title,
-                        latitude,
-                        longitude,
-                        address,
-                        date_available,
-                        price,
-                        area,
-                        neighbourhood,
-                        extras,
-                        bedrooms,
-                        bathrooms,
-                        unit_type,
-                        parking,
-                        smoking,
-                        pets,
-                        laundry,
-                        furnished,
-                        muni,
-                        location,
-                        body,
-                        city,
-                    )
-                ],
-            )
-
-            logging.debug(f"Added entry to BigQuery {response}")
-            logging.debug(f"Added entry {post_url} to db")
-            time.sleep(1)
-
-    c.close()
+    main(city, args.db)
