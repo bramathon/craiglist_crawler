@@ -1,247 +1,17 @@
-# -*- coding: utf-8 -*-
-#!/usr/bin/python3.4
-"""
-Created on Mon Jan 25 20:03:09 2016
-
-@author: bram
-"""
-
 import requests
 import sqlite3
 import time
-import requests
-import re
-import sys
-import os
 import argparse
 import logging
 
-import numpy as np
-import pandas as pd
-import matplotlib.path as mplPath
-
-from lxml import html
 from bs4 import BeautifulSoup
 from google.cloud import bigquery
 from dotenv import load_dotenv
 
-from vancouver_neighbourhoods import hoods, cities
 from rss_feeds import supported_cities, rss_feeds
+from parser import parse_listing
 
 logger = logging.getLogger(__name__)
-
-
-def parse_int(string):
-    return int(re.sub("[^0-9]", "", string))
-
-
-def get_title(soup):
-    title = soup.find_all(id="titletextonly")[0]
-    return title.find(text=True, recursive=False).strip()
-
-
-def get_body(soup):
-    body = soup.find(id="postingbody").get_text()
-    return body
-
-
-def get_bedrooms(soup):
-    try:
-        bedrooms = soup.select(".housing")[0]
-    except:
-        bedrooms = None
-    return bedrooms
-
-
-def get_price(soup):
-    try:
-        item = soup.select(".price")[0]
-        price_string = item.find(text=True, recursive=False).strip()
-        price = int(re.sub("[^0-9]", "", price_string))
-    except:
-        price = None
-    return price
-
-
-def get_coordinates(tree):
-    try:
-        longitude = float(tree.xpath('//*[@id="map"]//@data-longitude')[0])
-        latitude = float(tree.xpath('//*[@id="map"]//@data-latitude')[0])
-    except:
-        longitude = None
-        latitude = None
-    return [latitude, longitude]
-
-
-def get_address(soup):
-    try:
-        address = soup.select(".mapaddress")[0].find(text=True, recursive=False).strip()
-    except:
-        address = None
-    return address
-
-
-def get_location_soup(soup):
-    # get the location using soup
-    div = soup.find_all(id="map")[0]
-    longitude = 0
-    latitude = 0
-    return [latitude, longitude]
-
-
-def get_bedrooms(soup):
-    try:
-        attr = soup.select(".attrgroup")[0]
-        bedrooms = None
-        for s in attr.strings:
-            if s.find("BR") != -1:
-                bedrooms = parse_int(s)
-    except:
-        bedrooms = None
-    return bedrooms
-
-
-def get_bathrooms(soup):
-    try:
-        attr = soup.select(".attrgroup")[0]
-        bathrooms = None
-        for s in attr.strings:
-            if s.find("Ba") != -1:
-                text = s.find("Ba")
-                bathrooms = float(s[:text])
-    except:
-        bathrooms = None
-    return bathrooms
-
-
-def get_area(soup):
-    try:
-        attr = soup.select(".attrgroup")[0]
-        area = None
-        prev_s = None
-        for s in attr.strings:
-            if s.find("ft") != -1:
-                area = parse_int(prev_s)
-            prev_s = s
-    except:
-        area = None
-    return area
-
-
-def get_all_the_stuff(soup):
-    try:
-        attrs = soup.select(".attrgroup")
-        stuff = []
-        for attr in attrs:
-            for s in attr.strings:
-                if s.strip() != "":
-                    stuff.append(s.strip())
-        stuff = ",".join(stuff)
-    except:
-        stuff = None
-    return stuff
-
-
-def get_date_available(soup):
-    try:
-        tag = soup.select(".housing_movein_now")[0]
-        date = tag.attrs["data-date"]
-    except:
-        date = None
-    return date
-
-
-def get_neighbourhood(latitude, longitude):
-    # or, grab small from postig title text
-    try:
-        neighbourhood = None
-        for k, v in hoods.items():
-            if mplPath.Path(v.values).contains_point((longitude, latitude)):  # for some reason, files are long,lat
-                neighbourhood = k
-                break
-            if neighbourhood == None:
-                neighbourhood = re.sub("[()]", "", soup.select(".postingtitletext")[0].small.find(text=True, recursive=False).strip())
-    except:
-        neighbourhood = None
-    return neighbourhood
-
-
-def get_location(soup):
-    location = None
-    try:
-        location = re.sub("[()]", "", soup.select(".postingtitletext")[0].small.find(text=True, recursive=False).strip())
-    except:
-        location = None
-    return location
-
-
-def get_muni(latitude, longitude):
-    selected_city = None
-    try:
-        for city, coords in cities.items():
-            if mplPath.Path(coords.values).contains_point((longitude, latitude)) == True:
-                selected_city = city
-                break
-    except:
-        selected_city = None
-    return selected_city
-
-
-def extra_processor(extras):
-    unit_type = None
-    parking = None
-    smoking = None
-    pets = None
-    laundry = None
-    furnished = 0
-    try:
-        details = extras.split(",")
-        # Unit
-        if "apartment" in details:
-            unit_type = "apartment"
-        if "house" in details:
-            unit_type = "house"
-        if "townhouse" in details:
-            unit_type = "townhouse"
-        if "condo" in details:
-            unit_type = "condo"
-        if "furnished" in details:
-            furnished = 1
-
-        # Parking
-        if "attached garage" in details:
-            parking = "garage"
-        if "detached garage" in details:
-            parking = "garage"
-        if "street parking" in details:
-            parking = "street parking"
-        if "off-street parking" in details:
-            parking = "off-street parking"
-        if "carport" in details:
-            parking = "carport"
-
-        # Smoking
-        if "no smoking" in details:
-            smoking = 0
-
-        # Pets
-        if "cats are OK - purrr" in details:
-            pets = "cats"
-        if "dogs are OK - wooof" in details:
-            pets = "cats"
-        if ("dogs are OK - wooof" in details) and ("cats are OK - purrr" in details):
-            pets = "dogs+cats"
-
-        # Laundry
-        if "laundry in bldg" in details:
-            laundry = "building"
-        if "laundry on site" in details:
-            laundry = "building"
-        if "w/d in unit" in details:
-            laundry = "unit"
-    except:
-        None
-    return [unit_type, parking, smoking, pets, laundry, furnished]
 
 
 def get_listings(city):
@@ -263,65 +33,32 @@ def get_listings(city):
     return listings
 
 
-def parse_listing(post_url):
-    "Parses a craiglist housing for rent ad"
+def fetch_page(post_url):
     logging.info(f"New Entry: {post_url} Parsing and adding to database")
     page = requests.get(post_url)
     if page.status_code != 200:
         logger.warn(f"Bad Request: {page.text}")
         raise Exception
-    tree = html.fromstring(page.content)
-    soup = BeautifulSoup(page.text, "html.parser")
+    return page
 
-    latitude, longitude = get_coordinates(tree)
-    address = get_address(soup)
-    price = get_price(soup)
-    area = get_area(soup)
-    bedrooms = get_bedrooms(soup)
-    bathrooms = get_bathrooms(soup)
-    extras = get_all_the_stuff(soup)
-    body = get_body(soup)
-    unit_type, parking, smoking, pets, laundry, furnished = extra_processor(extras)
-    date_available = get_date_available(soup)
-    neighbourhood = get_neighbourhood(latitude, longitude)
-    location = get_location(soup)
-    muni = get_muni(latitude, longitude)
 
-    data = {
-        "post_url": post_url,
-        "latitude": latitude,
-        "longitude": longitude,
-        "address": address,
-        "price": price,
-        "area": area,
-        "bedrooms": bedrooms,
-        "bathrooms": bathrooms,
-        "extras": extras,
-        "body": body,
-        "unit_type": unit_type,
-        "parking": parking,
-        "smoking": smoking,
-        "pets": pets,
-        "laundry": laundry,
-        "furnished": furnished,
-        "date_available": date_available,
-        "neighbourhood": neighbourhood,
-        "location": location,
-        "muni": muni,
-    }
-
+def check_listing(post_url):
+    "Parses a craiglist housing for rent ad"
+    page = fetch_page(post_url)
+    data = parse_listing(page)
     return data
 
 
-def save_listing(listing, conn):
+def save_to_local(listing, conn):
     "listing is a dict with attributes matching columns"
+    logger.debug(f"Saving listing: {listing['post_title']} to sqlite")
     l = listing
     conn.execute(
         "INSERT INTO listings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
             l["post_date"],
             l["post_url"],
-            l["title"],
+            l["post_title"],
             l["latitude"],
             l["longitude"],
             l["address"],
@@ -348,16 +85,16 @@ def save_listing(listing, conn):
     logger.debug(f"Added entry {l['post_url']} to db")
 
 
-def save_to_biqquery(listing, client):
+def save_to_biqquery(listing, client, table):
+    logger.debug(f"Saving listing: {listing['post_title']} to bigquery")
     l = listing
-    table = client.get_table("bram-185008.craiglist_crawler.listings")
     response = client.insert_rows(
         table,
         [
             (
                 l["post_date"],
                 l["post_url"],
-                l["title"],
+                l["post_title"],
                 l["latitude"],
                 l["longitude"],
                 l["address"],
@@ -384,7 +121,26 @@ def save_to_biqquery(listing, client):
     logger.debug(f"Added entry to BigQuery {response}")
 
 
-def main(city, db):
+def get_listing_metadata(listing):
+    post_info = listing.div
+    post_date = post_info.time.get("datetime")
+    post_id = post_info.a.get("data-id")
+    post_url = post_info.a.get("href")
+    post_title = post_info.a.text
+    return post_date, post_id, post_url, post_title
+
+
+def listing_seen(post_url, post_date, cursor):
+    sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
+    cursor.execute(sql, [post_url, post_date])
+    if cursor.fetchone():
+        logging.debug("Already in db...")
+        return True
+    else:
+        return False
+
+
+def main(city, db="listings-v3.db"):
 
     listings = get_listings(city)
 
@@ -392,37 +148,29 @@ def main(city, db):
     c = conn.cursor()
 
     client = bigquery.Client()
+    table = client.get_table("bram-185008.craiglist_crawler.listings")
 
     for entry in listings:
         # Grab some in info from the entry
-        post_info = entry.div
-        post_date = post_info.time.get("datetime")
-        post_id = post_info.a.get("data-id")
-        post_url = post_info.a.get("href")
-        title = post_info.a.text
-        # print(post_date)
-        # print(post_url)
+        post_date, post_id, post_url, post_title = get_listing_metadata(entry)
+
+        logger.debug(f"Listing: {post_title}")
         # check if the entry is already in the database
-        sql = "SELECT * FROM listings WHERE id = ? AND date = ?"
-        c.execute(sql, [post_url, post_date])
-        if c.fetchone():
-            logging.debug("Already in db...")
-        else:
+        if not listing_seen(post_url, post_date, conn):
             try:
-                listing = parse_listing(post_url)
+                listing = check_listing(post_url)
             except:
                 continue
 
             listing["post_date"] = post_date
-            listing["title"] = title
+            listing["post_url"] = post_url
+            listing["post_title"] = post_title
             listing["city"] = city
 
-            save_listing(listing, conn)
+            save_to_local(listing, conn)
 
-            save_to_biqquery(listing, client)
+            save_to_biqquery(listing, client, table)
             time.sleep(1)
-
-    c.close()
 
 
 if __name__ == "__main__":
