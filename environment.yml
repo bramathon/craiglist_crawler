@@ -3,18 +3,18 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - beautifulsoup4
-  - feedparser
-  - lxml
+  - beautifulsoup4=4.9.3
+  - lxml=4.6.1
   - matplotlib
-  - numpy
-  - pandas
+  - numpy=1.19.2
+  - pandas=1.1.3
   - jupyterlab
   - pip
-  - requests
-  - google-cloud-bigquery
-  - prefect
+  - requests=2.24.0
+  - google-cloud-bigquery=2.1.0
+  - prefect=0.13.13
   - pip:
     - black
     - python-language-server[all]
     - python-dotenv
+    - -e .

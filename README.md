@@ -42,21 +42,6 @@ eg:
 GOOGLE_APPLICATION_CREDENTIALS='/home/bram/Documents/craiglist-crawler-a7aff758fc9d.json'
 ```
 
-### Installing a new package
-
-When a package is added to the Pipfile, we need to regenerate the lock file, then rebuild the docker container
-```bash
-pipenv lock
-```
-
-### Using pipenv
-
-If you don't want to use docker, use pipenv to manage environment. Activate the pipenv envionrment with:
-```bash
-pipenv install
-pipenv shell
-```
-
 ## Database
 
 A local sqlite database scraper/listings-v3.db keeps track of all the listings for quick lookup. The schema is shown below:

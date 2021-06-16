@@ -6,7 +6,7 @@ import matplotlib.path as mplPath
 from bs4 import BeautifulSoup
 from lxml import html
 
-from vancouver_neighbourhoods import hoods, cities
+from scraper.vancouver_neighbourhoods import hoods, cities
 
 logger = logging.getLogger(__name__)
 

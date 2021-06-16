@@ -9,13 +9,19 @@ To do:
 
 import time
 import sqlite3
+import os
 
 from google.cloud import bigquery
 from prefect import task, Flow, Parameter
-from dotenv import load_dotenv
-from check_listings import (
+from prefect.run_configs import DockerRun
+from prefect.engine.executors import DaskExecutor
+from prefect.environments import LocalEnvironment
+from prefect.run_configs import LocalRun
+from prefect.environments.storage import Docker
+
+# from dotenv import load_dotenv
+from scraper.check_listings import (
     get_listings,
-    check_listing,
     get_listing_metadata,
     save_to_local,
     save_to_biqquery,
@@ -23,15 +29,21 @@ from check_listings import (
     fetch_page,
 )
 
-from parser import parse_listing
+from scraper.parser import parse_listing
 
-load_dotenv()
+# load_dotenv()
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/bram/Documents/craiglist_crawler/craiglist-crawler-a7aff758fc9d.json"
 
 
 @task
 def get_current_listings(city):
     listings = get_listings(city)
-    return listings
+    entries = []
+    for entry in listings:
+        e = {}
+        e["post_date"], e["post_id"], e["post_url"], e["post_title"] = get_listing_metadata(entry)
+        entries.append(e)
+    return entries
 
 
 @task
@@ -41,7 +53,7 @@ def fetch_pages(listings, city, db="listings-v3.db"):
     c = conn.cursor()
     for entry in listings:
         # Grab some in info from the entry
-        post_date, post_id, post_url, post_title = get_listing_metadata(entry)
+        post_date, post_id, post_url, post_title = entry["post_date"], entry["post_id"], entry["post_url"], entry["post_title"]
         # check if the entry is already in the database
         if not listing_seen(post_url, post_date, c):
             try:
@@ -79,7 +91,7 @@ def parse_listings(pages):
 
 
 def main():
-    with Flow("Check listings") as flow:
+    with Flow("Check listings", environment=LocalEnvironment(executor=DaskExecutor())) as flow:
         city = Parameter("city")
 
         ## Extract
@@ -95,6 +107,16 @@ def main():
         # Load
         save_listings(data)
 
+    # flow.storage = Docker(registry_url="bramevert/craig")
+
+    # flow.run_config = DockerRun(
+    #     env={"GOOGLE_APPLICATION_CREDENTIALS": "/home/app/craiglist-crawler-a7aff758fc9d.json"},
+    #     image="craig:latest",
+    #     labels=["bram-desktop"],
+    # )
+    # flow.register(project_name="Craiglist Crawler")
+
+    # flow.run_agent()
     flow.run(city="vancouver")
 
 

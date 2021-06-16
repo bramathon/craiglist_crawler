@@ -8,8 +8,8 @@ from bs4 import BeautifulSoup
 from google.cloud import bigquery
 from dotenv import load_dotenv
 
-from rss_feeds import supported_cities, rss_feeds
-from parser import parse_listing
+from .rss_feeds import supported_cities, rss_feeds
+from .parser import parse_listing
 
 logger = logging.getLogger(__name__)
 
